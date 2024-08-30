@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: test-driven-dev
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: password
+    # This setting allows the creation of the H2 database schema based on JPA entities.
+    schema: classpath:schema.sql
+    data: classpath:data.sql
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+  sql:
+    init:
+      mode: always
+
+# Server settings
+server:
+  port: 8080
+
+# Log levels
+logging:
+  level:
+    root: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type: TRACE
