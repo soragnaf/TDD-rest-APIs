@@ -5,15 +5,20 @@ import com.tdd.exception.PostNotFoundException;
 import com.tdd.repository.PostRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultMatcher;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -33,8 +38,26 @@ public class PostControllerTest {
 
     List<Post> posts;
 
+    // *** stubbing mock class and method
+    record MockArgsApis (
+            HttpStatus statusToTest,
+            Optional<Post> post,
+            ResultMatcher responseStatus)
+    {};
+
+    static Stream<MockArgsApis> sourcePostMethod() {
+        return Stream.of(
+                new MockArgsApis(
+                        HttpStatus.OK, Optional.of(new Post(1, 1, "This is a new post", "My new post ..", null)), status().isOk()),
+                new MockArgsApis(
+                        HttpStatus.NOT_FOUND, Optional.of(new Post(999, 999, "", "", null)), status().isNotFound())
+        );
+    }
+
+    // ***
+
     @BeforeEach
-    public void setUp()  {
+    void setUp()  {
         posts = List.of(
                 new Post(1, 1, "Hello World", "This is my first post", null),
                 new Post(2, 2, "Second post", "This is my second post", null)
@@ -64,6 +87,7 @@ public class PostControllerTest {
                 """;
 
         when(postRepository.findAll()).thenReturn(posts);
+
 
         mockMvc.perform(get("/api/posts"))
                 .andExpect(status().isOk())
@@ -124,20 +148,26 @@ public class PostControllerTest {
                 .andExpect(status().isCreated());
     }
 
-    @Test
-    void shouldUpdatePostWhenGivenValidPost() throws Exception {
-        Post updated = new Post(1, 1, "This is a new post", "My new post ..", null);
+    //@Test
+    @ParameterizedTest
+    @MethodSource("sourcePostMethod")
+    void testUpdatePostWhenGivenValidPostOrInvalidPost(MockArgsApis arg) throws Exception {
+        Post post = arg.post().get();
 
-        when(postRepository.findById(1)).thenReturn(Optional.of(updated));
-        when(postRepository.save(updated)).thenReturn(updated);
+        if(arg.statusToTest().is2xxSuccessful()) {
+            when(postRepository.findById(post.id())).thenReturn(Optional.of(post));
+            when(postRepository.save(post)).thenReturn(post);
+        } else {
+            when(postRepository.findById(post.id())).thenReturn(Optional.empty());
+        }
 
         //string interpolation by java 21
         String requestBody = STR."""
                 {
-                    "id":\{updated.id()},
-                    "userId":\{updated.userId()},
-                    "title":"\{updated.title()}",
-                    "body":"\{updated.body()}",
+                    "id":\{post.id()},
+                    "userId":\{post.userId()},
+                    "title":"\{post.title()}",
+                    "body":"\{post.body()}",
                     "version": null
                 }
                 """;
@@ -145,10 +175,8 @@ public class PostControllerTest {
         mockMvc.perform(put("/api/posts/1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
-                .andExpect(status().isOk());
+                .andExpect(arg.responseStatus());
     }
-
-    //TODO put and throw ex
 
     @Test
     void shouldDeletePostWhenGivenValidId() throws Exception {
